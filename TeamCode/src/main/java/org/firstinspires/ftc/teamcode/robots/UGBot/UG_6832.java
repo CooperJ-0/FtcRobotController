@@ -439,25 +439,6 @@ public class UG_6832 extends LinearOpMode {
                         joystickDrive();
                         break;
                     case 2:
-                        robot.luncher.alignGripperForwardFacing();
-                        break;
-                    case 4:
-                        break;
-                    case 6:
-                        demo();
-                        break;
-                    case 7:
-                        robot.driveIMUDistanceWithReset(.6,robot.getHeading(),true,.470);
-                        break;
-                    case 8:
-                        demo();
-                        break;
-                    case 9:
-                        if (auto.simultaneousStateTest.execute())
-                            active = false;
-                        break;
-                    case 10:
-
                         break;
                     default:
                         robot.stopAll();
@@ -479,10 +460,6 @@ public class UG_6832 extends LinearOpMode {
             telemetry.update();
             idle(); // Always call idle() at the bottom of your while(opModeIsActive()) loop
         }
-    }
-
-    public boolean driveStraight() {
-        return robot.driveForward(true, 1, .5);
     }
 
     int tpmtuningstage = 0;
@@ -677,22 +654,6 @@ public class UG_6832 extends LinearOpMode {
         if (notdeadzone(gamepad1.left_stick_x)) {
             robot.turret.adjust(gamepad1.left_stick_x);
         }
-    }
-
-    private void logTurns(double target) {
-        telemetry.addData("Error: ", target - robot.getHeading());
-        // telemetry.update();
-    }
-
-    private void turnTest() {
-        if (robot.rotateIMU(90, 3)) {
-            telemetry.addData("Angle Error: ", 90 - robot.getHeading());
-            telemetry.addData("Final Test Heading: ", robot.getHeading());
-            robot.setZeroHeading();
-            active = false;
-        }
-        telemetry.addData("Current Angle: ", robot.getHeading());
-        telemetry.addData("Angle Error: ", 90 - robot.getHeading());
     }
 
     // the method that controls the main state of the robot; must be called in the

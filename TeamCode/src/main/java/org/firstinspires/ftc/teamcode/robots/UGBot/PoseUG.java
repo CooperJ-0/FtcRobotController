@@ -1,10 +1,7 @@
 package org.firstinspires.ftc.teamcode.robots.UGBot;
 
-import android.graphics.Bitmap;
-
 import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.config.Config;
-import com.acmerobotics.dashboard.telemetry.TelemetryPacket;
 import com.qualcomm.hardware.bosch.BNO055IMU;
 import com.qualcomm.robotcore.hardware.AnalogInput;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -20,11 +17,8 @@ import org.firstinspires.ftc.teamcode.util.PIDController;
 import org.firstinspires.ftc.teamcode.vision.SkystoneGripPipeline;
 import org.firstinspires.ftc.teamcode.vision.TowerHeightPipeline;
 import org.firstinspires.ftc.teamcode.vision.Viewpoint;
-import org.opencv.android.Utils;
-import org.opencv.core.Mat;
 
 import static org.firstinspires.ftc.teamcode.util.Conversions.futureTime;
-import static org.firstinspires.ftc.teamcode.util.Conversions.nextCardinal;
 import static org.firstinspires.ftc.teamcode.util.Conversions.wrapAngle;
 import static org.firstinspires.ftc.teamcode.util.Conversions.wrapAngleMinus;
 import static org.firstinspires.ftc.teamcode.vision.Config.ALIGN_D;
@@ -51,8 +45,6 @@ public class PoseUG {
     // setup
     HardwareMap hwMap;
     PIDController drivePID = new PIDController(0, 0, 0);
-    PIDController alignPID = new PIDController(ALIGN_P, ALIGN_I, ALIGN_D);
-    private int autoAlignStage = 0;
     FtcDashboard dashboard;
 
     public static double kpDrive = 0.02; // proportional constant multiplier
@@ -60,21 +52,10 @@ public class PoseUG {
     public static double kdDrive = 0.68; // derivative constant multiplier //increase
     public static double cutout = 1.0;
 
-    public double headingP = 0.007;
-    public double headingD = 0;
-
-    public double balanceP = .35;
-    public double balanceD = 3.1444;
-
-    public double stoneLengthMeters = 8 * 25.4 / 1000;
-    public long stoneLengthTicks = (long) stoneLengthMeters * forwardTPM;
-    public double foundationToNearestStoneMeters = 1.75; // tune depending on final arm position.
-
     // All Actuators
-    private DcMotor motorFrontRight = null;
-    private DcMotor motorBackLeft = null;
-    private DcMotor motorFrontLeft = null;
-    private DcMotor motorBackRight = null;
+    private DcMotor motorLeft = null;
+    private DcMotor motorRight = null;
+
     private DcMotor elbow = null;
     private DcMotor extender = null;
     private DcMotor turretMotor = null;
@@ -99,14 +80,8 @@ public class PoseUG {
     AnalogInput gripperRight;
     // DigitalChannel magSensor;
 
-    // drive train power values
     private double powerLeft = 0;
     private double powerRight = 0;
-    // mecanum types
-    private double powerFrontLeft = 0;
-    private double powerFrontRight = 0;
-    private double powerBackLeft = 0;
-    private double powerBackRight = 0;
 
     // PID values
     public static int forwardTPM = 1304;// todo- use drive IMU to get this perfect
@@ -181,10 +156,6 @@ public class PoseUG {
 
     Orientation imuAngles; // pitch, roll and yaw from the IMU
     // roll is in x, pitch is in y, yaw is in z
-
-    public boolean isAutonSingleStep() {
-        return autonSingleStep;
-    }
 
     public void setAutonSingleStep(boolean autonSingleStep) {
         this.autonSingleStep = autonSingleStep;
@@ -299,36 +270,18 @@ public class PoseUG {
         this.gripperLeft = this.hwMap.get(AnalogInput.class, "gripperLeft"); // Use generic form of device mapping
         this.gripperRight = this.hwMap.get(AnalogInput.class, "gripperRight"); // Use generic form of device mapping
 
-        // motorFrontLeft = hwMap.get(DcMotor.class, "motorFrontLeft");
-        motorBackLeft = hwMap.get(DcMotor.class, "motorBackLeft");
-        // motorFrontRight = hwMap.get(DcMotor.class, "motorFrontRight");
-        motorBackRight = hwMap.get(DcMotor.class, "motorBackRight");
-        turretMotor = hwMap.get(DcMotor.class, "turret");
-        // elbow.setDirection(DcMotor.Direction.REVERSE);
 
-        // motorFrontLeft.setDirection(DcMotor.Direction.FORWARD);
-        motorBackLeft.setDirection(DcMotor.Direction.REVERSE);
-        // motorFrontRight.setDirection(DcMotor.Direction.REVERSE);
-        motorBackRight.setDirection(DcMotor.Direction.FORWARD);
-        // motorFrontRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        motorBackLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        // motorFrontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        motorBackRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        // turretMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        // magSensor.setMode(DigitalChannel.Mode.INPUT);
+        motorLeft = hwMap.get(DcMotor.class, "motorBackLeft");
+        motorRight = hwMap.get(DcMotor.class, "motorBackRight");
+        turretMotor = hwMap.get(DcMotor.class, "turret");
+
+        motorLeft.setDirection(DcMotor.Direction.REVERSE);
+        motorRight.setDirection(DcMotor.Direction.FORWARD);
+        motorLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        motorRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         extender.setDirection(DcMotor.Direction.REVERSE);
 
-        // behaviors of motors
-        /*
-         * driveLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-         * driveRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE); if
-         * (this.currentBot == RobotType.BigWheel) {
-         * driveLeft.setDirection(DcMotorSimple.Direction.FORWARD);
-         * driveRight.setDirection(DcMotorSimple.Direction.REVERSE); } else {
-         * driveLeft.setDirection(DcMotorSimple.Direction.REVERSE);
-         * driveRight.setDirection(DcMotorSimple.Direction.FORWARD); }
-         */
         // setup subsystems
         luncher = new Luncher(elbow, extender, hook, intakeServoFront, intakeServoBack, gripperSwivel,gripperLeft,gripperRight);
         turretIMU = hwMap.get(BNO055IMU.class, "turretIMU");
@@ -347,16 +300,6 @@ public class PoseUG {
         imu = hwMap.get(BNO055IMU.class, "baseIMU");
         imu.initialize(parametersIMU);
 
-        // initialize vision
-
-//        VuforiaLocalizer vuforia;
-//        VuforiaLocalizer.Parameters parameters = new VuforiaLocalizer.Parameters();
-//        parameters.vuforiaLicenseKey = RC.VUFORIA_LICENSE_KEY;
-//        parameters.cameraName = hwMap.get(WebcamName.class, "Webcam 1");
-//        vuforia = ClassFactory.getInstance().createVuforia(parameters);
-//        Vuforia.setFrameFormat(PIXEL_FORMAT.RGB565, true);
-//        vuforia.setFrameQueueCapacity(1);
-//        towerHeightPipeline = new TowerHeightPipeline(hwMap, vuforia);
 
         // dashboard
         dashboard = FtcDashboard.getInstance();
@@ -494,13 +437,6 @@ public class PoseUG {
     public double getDistRightDist() {
         return distRight.getDistance(DistanceUnit.METER);
     }
-
-    /**
-     * Stops all motors on the robot
-     */
-    // public void stopAll(){
-    // driveMixerTank(0,0);
-    // }
 
     /**
      * Drive forwards for a set power while maintaining an IMU heading using PID
@@ -738,40 +674,6 @@ public class PoseUG {
     public void driveMixerMec(double forward, double strafe, double rotate) {
 
         // reset the power of all motors
-        powerBackRight = 0;
-        powerFrontRight = 0;
-        powerBackLeft = 0;
-        powerFrontLeft = 0;
-
-        // set power in the forward direction
-        powerFrontLeft = forward;
-        powerBackLeft = forward;
-        powerFrontRight = forward;
-        powerBackRight = forward;
-
-        // set power in the left strafe direction
-        powerFrontLeft += -strafe;
-        powerFrontRight += strafe;
-        powerBackLeft += strafe;
-        powerBackRight += -strafe;
-
-        // set power in the clockwise rotational direction
-        powerFrontLeft += rotate;
-        powerBackLeft += rotate;
-        powerFrontRight += -rotate;
-        powerBackRight += -rotate;
-
-        // provide power to the motors
-        // motorFrontLeft.setPower(clampMotor(powerFrontLeft));
-        motorBackLeft.setPower(clampMotor(powerBackLeft));
-        // motorFrontRight.setPower(clampMotor(powerFrontRight));
-        motorBackRight.setPower(clampMotor(powerBackRight));
-
-    }
-
-    public void driveMixerTank(double forward, double rotate) {
-
-        // reset the power of all motors
         powerRight = 0;
         powerLeft = 0;
 
@@ -779,14 +681,20 @@ public class PoseUG {
         powerLeft = forward;
         powerRight = forward;
 
+        // set power in the left strafe direction
+        powerLeft += strafe;
+        powerRight += -strafe;
+
         // set power in the clockwise rotational direction
         powerLeft += rotate;
         powerRight += -rotate;
+
         // provide power to the motors
-        motorBackLeft.setPower(clampMotor(powerBackLeft));
-        motorBackRight.setPower(clampMotor(powerBackRight));
+        motorLeft.setPower(clampMotor(powerLeft));
+        motorRight.setPower(clampMotor(powerRight));
 
     }
+
 
     public static void normalize(double[] motorspeeds) {
         double max = Math.abs(motorspeeds[0]);
@@ -823,19 +731,19 @@ public class PoseUG {
      */
     public void resetMotors(boolean enableEncoders) {
         // motorFrontLeft.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        motorBackLeft.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        motorLeft.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         // motorFrontRight.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        motorBackRight.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        motorRight.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         if (enableEncoders) {
             // motorFrontLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            motorBackLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            motorLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             // motorFrontRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            motorBackRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            motorRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         } else {
             // motorFrontLeft.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-            motorBackLeft.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            motorLeft.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
             // motorFrontRight.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-            motorBackRight.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            motorRight.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         }
 
     }
@@ -876,7 +784,7 @@ public class PoseUG {
      * retrieve the average value of ticks on all motors - differential
      */
     public long getAverageTicks() {
-        long averageTicks = (motorBackLeft.getCurrentPosition() + motorBackRight.getCurrentPosition()) / 2;
+        long averageTicks = (motorLeft.getCurrentPosition() + motorRight.getCurrentPosition()) / 2;
         return averageTicks;
     }
 
@@ -884,18 +792,16 @@ public class PoseUG {
      * retrieve the average of the absolute value of ticks on all motors - mecanum
      */
     public long getAverageAbsTicks() {
-        long averageTicks = (Math.abs(motorFrontLeft.getCurrentPosition())
-                + Math.abs(motorBackLeft.getCurrentPosition()) + Math.abs(motorFrontRight.getCurrentPosition())
-                + Math.abs(motorBackRight.getCurrentPosition())) / 4;
+        long averageTicks = (Math.abs(motorLeft.getCurrentPosition()) + Math.abs(motorRight.getCurrentPosition())) / 2;
         return averageTicks;
     }
 
     public int getLeftMotorTicks() {
-        return motorBackLeft.getCurrentPosition();
+        return motorLeft.getCurrentPosition();
     }
 
     public int getRightMotorTicks() {
-        return motorBackRight.getCurrentPosition();
+        return motorRight.getCurrentPosition();
     }
 
     /**
@@ -964,8 +870,6 @@ public class PoseUG {
      */
     public void movePIDMixer(double Kp, double Ki, double Kd, double pwrFwd, double pwrStf, double currentAngle,
             double targetAngle) {
-        // if (pwr>0) PID.setOutputRange(pwr-(1-pwr),1-pwr);
-        // else PID.setOutputRange(pwr - (-1 - pwr),-1-pwr);
 
         // initialization of the PID calculator's output range, target value and
         // multipliers
@@ -986,22 +890,6 @@ public class PoseUG {
         // performs the drive with the correction applied
         driveMixerMec(pwrFwd, pwrStf, correction);
 
-        // logging section that can be reactivated for debugging
-        /*
-         * ArrayList toUpdate = new ArrayList(); toUpdate.add((PID.m_deltaTime));
-         * toUpdate.add(Double.valueOf(PID.m_error)); toUpdate.add(new
-         * Double(PID.m_totalError)); toUpdate.add(new Double(PID.pwrP));
-         * toUpdate.add(new Double(PID.pwrI)); toUpdate.add(new Double(PID.pwrD));
-         */
-        /*
-         * logger.UpdateLog(Long.toString(System.nanoTime()) + "," +
-         * Double.toString(PID.m_deltaTime) + "," + Double.toString(pose.getOdometer())
-         * + "," + Double.toString(PID.m_error) + "," +
-         * Double.toString(PID.m_totalError) + "," + Double.toString(PID.pwrP) + "," +
-         * Double.toString(PID.pwrI) + "," + Double.toString(PID.pwrD) + "," +
-         * Double.toString(correction)); motorLeft.setPower(pwr + correction);
-         * motorRight.setPower(pwr - correction);
-         */
     }
 
     public void driveDriftCorrect(double driftance, double origialDist, double pwr, boolean forward) {
@@ -1183,21 +1071,21 @@ public class PoseUG {
             }
 
             // set drive motors to run to position mode
-            motorBackRight.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-            motorBackLeft.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            motorRight.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            motorLeft.setMode(DcMotor.RunMode.RUN_TO_POSITION);
 
-            motorBackRight.setTargetPosition((int) arcright * rightTPM);
-            motorBackLeft.setTargetPosition((int) arcleft * leftTPM);
+            motorRight.setTargetPosition((int) arcright * rightTPM);
+            motorLeft.setTargetPosition((int) arcleft * leftTPM);
 
             // start moving
-            motorBackRight.setPower(speedleft);
-            motorBackLeft.setPower((speedright));
+            motorRight.setPower(speedleft);
+            motorLeft.setPower((speedright));
 
             pivotTurnInitialized = true;
 
         }
 
-        if ((timelimit < futureTime(0)) && ((motorBackLeft.isBusy() || motorBackRight.isBusy())))
+        if ((timelimit < futureTime(0)) && ((motorLeft.isBusy() || motorRight.isBusy())))
             return false;
         else {
             resetMotors(true);
